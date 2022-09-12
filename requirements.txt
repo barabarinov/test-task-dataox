@@ -1,0 +1,5 @@
+beautifulsoup4==4.11.1
+pip==22.2.2
+setuptools==63.4.2
+soupsieve==2.3.2.post1
+wheel==0.37.1
