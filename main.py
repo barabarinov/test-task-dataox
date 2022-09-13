@@ -1,20 +1,20 @@
-from bs4 import BeautifulSoup
-import requests
-from datetime import datetime
-import concurrent.futures
+import argparse
 import json
 
-MAX_NUMBER_OF_PAGES = 100
-CONNECTIONS = 10
-TIMEOUT = 10
+import concurrent.futures
+from datetime import datetime
+
+import requests
+from bs4 import BeautifulSoup
+from save_info_to_data import save_info_to_database
 
 
-def parse_page(page_number):
+def parse_page(page_number, timeout):
     print(f"Doing request to page {page_number}")
     response = requests.get(
         f"https://www.kijiji.ca/b-apartments-condos/city-of-toronto/page-{page_number + 1}/c37l1700273",
         allow_redirects=page_number == 0,
-        timeout=TIMEOUT,
+        timeout=timeout,
     )
     print(f"Got request from page {page_number} with status", response.status_code)
     if response.status_code == 302:
@@ -53,16 +53,29 @@ def parse_page(page_number):
             currency, price = price_text[:1], float(price_text[1:].replace(",", ""))
         except ValueError:
             # print(f"Unable to parse '{price_text}' in format for number")
-            currency, price = None, price_text
-        out.append((image_link, title, date_posted, location, number_of_beds, description, currency, price))
+            currency, price = None, None
+        out.append(
+            (
+                image_link,
+                title,
+                date_posted,
+                location,
+                number_of_beds,
+                description,
+                currency,
+                price,
+            )
+        )
     return json.dumps(out)
 
 
-def main():
+def main(workers, max_pages, timeout):
     out = []
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=CONNECTIONS) as executor:
-        future_to_url = (executor.submit(parse_page, page) for page in range(MAX_NUMBER_OF_PAGES))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
+        future_to_url = (
+            executor.submit(parse_page, page, timeout) for page in range(max_pages)
+        )
         for future in concurrent.futures.as_completed(future_to_url):
             try:
                 data = future.result()
@@ -70,9 +83,29 @@ def main():
                 print(f"Got error from future: {exc}")
             else:
                 out.append(json.loads(data))
+    for i in out:
+        for j in i:
+            save_info_to_database(j)
 
     print(out)
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "-m",
+        "--max-number-of-pages",
+        type=int,
+        default=100,
+        help="maximum number of pages to parse",
+    )
+    parser.add_argument(
+        "-w", "--workers", type=int, default=10, help="number of threads to use"
+    )
+    parser.add_argument(
+        "-t", "--timeout", type=int, default=10, help="timeout of each request"
+    )
+
+    args = parser.parse_args()
+
+    main(args.workers, args.max_number_of_pages, args.timeout)
