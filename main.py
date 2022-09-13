@@ -1,9 +1,8 @@
 import argparse
 import json
-
 import concurrent.futures
 from datetime import datetime
-
+from models import Apartment
 import requests
 from bs4 import BeautifulSoup
 from save_info_to_data import save_info_to_database
@@ -20,7 +19,6 @@ def parse_page(page_number, timeout):
     if response.status_code == 302:
         print("Reached the end of pages")
         return []
-
     soup = BeautifulSoup(response.text, "html.parser")
     items = soup.select("div.search-item")
     out = []
@@ -70,8 +68,7 @@ def parse_page(page_number, timeout):
 
 
 def main(workers, max_pages, timeout):
-    out = []
-
+    pages = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
         future_to_url = (
             executor.submit(parse_page, page, timeout) for page in range(max_pages)
@@ -82,12 +79,24 @@ def main(workers, max_pages, timeout):
             except Exception as exc:
                 print(f"Got error from future: {exc}")
             else:
-                out.append(json.loads(data))
-    for i in out:
-        for j in i:
-            save_info_to_database(j)
+                pages.append(json.loads(data))
 
-    print(out)
+    print(f"Got content from {len(pages)} pages")
+
+    for page_content in pages:
+        for apartment_data in page_content:
+            image_link, title, date_posted, location, number_of_beds, description, currency, price = apartment_data
+            apartment = Apartment(
+                image_link=image_link,
+                title=title,
+                date_posted=date_posted,
+                location=location,
+                number_of_beds=number_of_beds,
+                description=description,
+                currency=currency,
+                price=price,
+            )
+            save_info_to_database(apartment)
 
 
 if __name__ == "__main__":
@@ -105,7 +114,5 @@ if __name__ == "__main__":
     parser.add_argument(
         "-t", "--timeout", type=int, default=10, help="timeout of each request"
     )
-
     args = parser.parse_args()
-
     main(args.workers, args.max_number_of_pages, args.timeout)
