@@ -6,7 +6,7 @@ To install requirements run:
 
 ---
 
-Copy file `example.env` into `.env` and replace `DATABASE_URL` with your database_url
+Copy file `example.env` into `.env` and replace `DATABASE_URL` with your database_url and replace `CREDENTIALS` with your credentials. 
 
 ---
 

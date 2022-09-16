@@ -6,6 +6,7 @@ from models import Apartment
 import requests
 from bs4 import BeautifulSoup
 from save_info_to_data import save_info_to_database
+from save_info_to_googlesheets import save_info_to_google_sheets
 
 
 def parse_page(page_number, timeout):
@@ -45,7 +46,7 @@ def parse_page(page_number, timeout):
             .split("\n")[-1]
             .strip()
         )
-        description = item.select("div.description")[0].get_text().strip()
+        description = ' '.join(item.select("div.description")[0].get_text().split())
         price_text = item.select("div.price")[0].get_text().strip()
         try:
             currency, price = price_text[:1], float(price_text[1:].replace(",", ""))
@@ -69,6 +70,7 @@ def parse_page(page_number, timeout):
 
 def main(workers, max_pages, timeout):
     pages = []
+    list_of_apartment_data = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
         future_to_url = (
             executor.submit(parse_page, page, timeout) for page in range(max_pages)
@@ -97,6 +99,8 @@ def main(workers, max_pages, timeout):
                 price=price,
             )
             save_info_to_database(apartment)
+            list_of_apartment_data.append(apartment_data)
+    save_info_to_google_sheets(list_of_apartment_data)
 
 
 if __name__ == "__main__":
